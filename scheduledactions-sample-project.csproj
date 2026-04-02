@@ -10,7 +10,7 @@
 
   <ItemGroup>
 	  <PackageReference Include="Azure.Identity" Version="1.10.4" />
-	  <PackageReference Include="Azure.ResourceManager.ComputeSchedule" Version="1.0.0-alpha.20240430.1" />
+	  <PackageReference Include="Azure.ResourceManager.ComputeSchedule" Version="1.2.0-alpha.20260331.1" />
 
   </ItemGroup>
 
