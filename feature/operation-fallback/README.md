@@ -57,6 +57,8 @@ In other words, the retry window governs when the **last retry can be initiated*
 }
 ```
 
+> 📝 **SDK sample:** See [StartWithCleanBootFallback.cs](StartWithCleanBootFallback.cs) for a complete .NET example of submitting a Start operation with retry policy.
+
 ### Default behavior (no retry)
 
 By default, if you do not provide a `retryPolicy` — or provide one without specifying `retryWindowInMinutes` — **no retries are performed**. The operation is attempted once, and if it fails, it is immediately marked as failed.
@@ -119,6 +121,8 @@ The fallback action is the **last resort** — it only executes after all retrie
 }
 ```
 
+> 📝 **SDK sample:** See [StartWithCleanBootFallback.cs](StartWithCleanBootFallback.cs) for a complete .NET example including status polling and fallback interpretation.
+
 ### Example: Hibernate with Deallocate fallback
 
 ```json
@@ -137,6 +141,8 @@ The fallback action is the **last resort** — it only executes after all retrie
   "correlationId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 }
 ```
+
+> 📝 **SDK sample:** See [HibernateWithDeallocateFallback.cs](HibernateWithDeallocateFallback.cs) for a complete .NET example including status polling and fallback interpretation.
 
 ---
 
@@ -209,7 +215,7 @@ In this example:
 }
 ```
 
-In this example, both the primary operation and the fallback failed. The `fallbackOperationInfo` contains the error from the fallback attempt.
+In this example, both the primary operation and the fallback failed. The `fallbackOperationInfo` contains the error from the fallback attempt. Note the `lastOpType` field — it tells you the last operation the system attempted, which is useful for understanding what final action was taken on the VM before the failure.
 
 ---
 
@@ -240,12 +246,13 @@ else if operation.state == "Failed" and operation.fallbackOperationInfo is not N
         # Both primary and fallback failed — check errors
         # operation.resourceOperationError → primary error
         # operation.fallbackOperationInfo.error → fallback error
+        # operation.fallbackOperationInfo.lastOpType → the last operation attempted
 else:
     # Primary operation failed, no fallback was executed
     # Check operation.resourceOperationError for details
 ```
 
-> **Key takeaway:** When using fallback, do not rely solely on the `state` field. If `state` is `Failed` and you configured an `onFailureAction`, check `fallbackOperationInfo.status` to determine whether the fallback successfully recovered the operation.
+> **Key takeaway:** When using fallback, do not rely solely on the `state` field. If `state` is `Failed` and you configured an `onFailureAction`, check `fallbackOperationInfo.status` to determine whether the fallback successfully recovered the operation. If the fallback also failed, check `fallbackOperationInfo.lastOpType` to identify the last operation the system attempted on the VM.
 
 ---
 
