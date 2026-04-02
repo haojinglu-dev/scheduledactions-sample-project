@@ -1,5 +1,4 @@
 using Azure.Core;
-using Azure.Core.Pipeline;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ComputeSchedule;
@@ -21,21 +20,10 @@ internal static class HibernateWithDeallocateFallback
     /// Submits a Hibernate request with retry policy and Deallocate fallback,
     /// then polls for the operation result and interprets the fallback outcome.
     /// </summary>
-    /// <param name="simulationPolicy">
-    /// Optional simulation policy to inject simulated failures for testing.
-    /// Use SimulationProfilePolicy.HibernateRetryFailsFallbackSucceeds() to demo fallback.
-    /// </param>
-    public static async Task RunAsync(string subscriptionId, string location, string vmResourceId, SimulationProfilePolicy? simulationPolicy = null)
+    public static async Task RunAsync(string subscriptionId, string location, string vmResourceId)
     {
         TokenCredential credential = new DefaultAzureCredential();
-
-        ArmClientOptions options = new();
-        if (simulationPolicy is not null)
-        {
-            options.AddPolicy(simulationPolicy, HttpPipelinePosition.PerCall);
-        }
-
-        ArmClient client = new(credential, subscriptionId, options);
+        ArmClient client = new(credential, subscriptionId);
 
         ResourceIdentifier subscriptionResourceId = SubscriptionResource.CreateResourceIdentifier(subscriptionId);
         SubscriptionResource subscription = client.GetSubscriptionResource(subscriptionResourceId);

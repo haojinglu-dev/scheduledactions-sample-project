@@ -268,34 +268,6 @@ These samples require `Azure.ResourceManager.ComputeSchedule` version **1.2.0-al
 | [StartWithCleanBootFallback.cs](StartWithCleanBootFallback.cs) | Resume a hibernated VM with automatic clean boot if resume fails |
 | [CreateWithDeleteFallback.cs](CreateWithDeleteFallback.cs) | Create a VM with automatic Delete cleanup if creation fails |
 | [OperationStatusHelper.cs](OperationStatusHelper.cs) | Shared helper for polling status and interpreting fallback results |
-| [SimulationProfilePolicy.cs](SimulationProfilePolicy.cs) | Pipeline policy for injecting simulated failures to test fallback scenarios |
-
-### Testing with simulation mode
-
-The `SimulationProfilePolicy` injects an `x-simulation-profile` header that tells the service to simulate specific failure patterns. This allows deterministic, repeatable testing of fallback behavior without needing real platform failures.
-
-**Requirements:**
-- The target subscription must be in the `SimulationTrafficSubscriptionAllowlist` setting
-- `AllowSimulationTraffic` must be enabled on the target cluster
-
-**Pre-built scenarios:**
-
-```csharp
-// Hibernate fails twice, fallback Deallocate succeeds
-await HibernateWithDeallocateFallback.RunAsync(
-    subscriptionId, location, vmResourceId,
-    simulationPolicy: SimulationProfilePolicy.HibernateRetryFailsFallbackSucceeds());
-
-// Start (resume) fails twice, fallback clean boot succeeds
-await StartWithCleanBootFallback.RunAsync(
-    subscriptionId, location, vmResourceId,
-    simulationPolicy: SimulationProfilePolicy.StartRetryFailsFallbackSucceeds());
-
-// Hibernate fails, fallback also fails (both fail scenario)
-await HibernateWithDeallocateFallback.RunAsync(
-    subscriptionId, location, vmResourceId,
-    simulationPolicy: SimulationProfilePolicy.HibernateRetryFailsFallbackFails());
-```
 
 ---
 

@@ -1,5 +1,4 @@
 using Azure.Core;
-using Azure.Core.Pipeline;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ComputeSchedule;
@@ -20,20 +19,10 @@ internal static class CreateWithDeleteFallback
     /// Submits a Create request with retry policy and Delete fallback,
     /// then polls for the operation result and interprets the fallback outcome.
     /// </summary>
-    /// <param name="simulationPolicy">
-    /// Optional simulation policy to inject simulated failures for testing.
-    /// </param>
-    public static async Task RunAsync(string subscriptionId, string location, ResourceProvisionPayload resourceConfig, SimulationProfilePolicy? simulationPolicy = null)
+    public static async Task RunAsync(string subscriptionId, string location, ResourceProvisionPayload resourceConfig)
     {
         TokenCredential credential = new DefaultAzureCredential();
-
-        ArmClientOptions options = new();
-        if (simulationPolicy is not null)
-        {
-            options.AddPolicy(simulationPolicy, HttpPipelinePosition.PerCall);
-        }
-
-        ArmClient client = new(credential, subscriptionId, options);
+        ArmClient client = new(credential, subscriptionId);
 
         ResourceIdentifier subscriptionResourceId = SubscriptionResource.CreateResourceIdentifier(subscriptionId);
         SubscriptionResource subscription = client.GetSubscriptionResource(subscriptionResourceId);

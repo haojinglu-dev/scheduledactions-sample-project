@@ -10,12 +10,11 @@ namespace ComputeScheduleSampleProject
             string location = "centraluseuap";
             string vmResourceId = $"/subscriptions/{subscriptionId}/resourceGroups/hibernate-fallback-demo-cuse/providers/Microsoft.Compute/virtualMachines/hibernate-demo-vm";
 
-            // Use simulation mode to deterministically trigger fallback
+            // Run without simulation — real operation
             await HibernateWithDeallocateFallback.RunAsync(
                 subscriptionId,
                 location,
-                vmResourceId,
-                simulationPolicy: SimulationProfilePolicy.HibernateRetryFailsFallbackSucceeds());
+                vmResourceId);
         }
     }
 }
