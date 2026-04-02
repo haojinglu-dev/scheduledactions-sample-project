@@ -4,6 +4,8 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.ComputeSchedule;
 using Azure.ResourceManager.ComputeSchedule.Models;
 using Azure.ResourceManager.Resources;
+using System.ClientModel.Primitives;
+using System.Text.Json;
 
 namespace ComputeScheduleSampleProject.Feature.OperationFallback;
 
@@ -20,10 +22,21 @@ internal static class HibernateWithDeallocateFallback
     /// Submits a Hibernate request with retry policy and Deallocate fallback,
     /// then polls for the operation result and interprets the fallback outcome.
     /// </summary>
-    public static async Task RunAsync(string subscriptionId, string location, string vmResourceId)
+    /// <param name="simulationPolicy">
+    /// Optional simulation policy to inject simulated failures for testing.
+    /// Use SimulationProfilePolicy.HibernateRetryFailsFallbackSucceeds() to demo fallback.
+    /// </param>
+    public static async Task RunAsync(string subscriptionId, string location, string vmResourceId, SimulationProfilePolicy? simulationPolicy = null)
     {
         TokenCredential credential = new DefaultAzureCredential();
-        ArmClient client = new(credential);
+
+        ArmClientOptions options = new();
+        if (simulationPolicy is not null)
+        {
+            options.AddPolicy(simulationPolicy, HttpPipelinePosition.PerCall);
+        }
+
+        ArmClient client = new(credential, subscriptionId, options);
 
         ResourceIdentifier subscriptionResourceId = SubscriptionResource.CreateResourceIdentifier(subscriptionId);
         SubscriptionResource subscription = client.GetSubscriptionResource(subscriptionResourceId);
@@ -41,7 +54,7 @@ internal static class HibernateWithDeallocateFallback
             RetryPolicy = retryPolicy
         };
 
-        var resources = new UserRequestResources(new List<string> { vmResourceId });
+        var resources = new UserRequestResources(new List<ResourceIdentifier> { new(vmResourceId) });
         string correlationId = Guid.NewGuid().ToString();
         var hibernateRequest = new ExecuteHibernateContent(executionParameters, resources, correlationId);
 
@@ -80,40 +93,47 @@ internal static class HibernateWithDeallocateFallback
             GetOperationStatusResult statusResponse =
                 await subscription.GetVirtualMachineOperationStatusAsync(location, statusRequest);
 
-            foreach (var result in statusResponse.Results)
-            {
-                Console.WriteLine($"  VM: {result.ResourceId}");
-                Console.WriteLine($"  Operation: {result.OpType}, State: {result.State}");
+            // Serialize to JSON for full access to all fields including FallbackOperationInfo
+            BinaryData rawResponse = ModelReaderWriter.Write(statusResponse, ModelReaderWriterOptions.Json);
+            using JsonDocument doc = JsonDocument.Parse(rawResponse);
 
-                if (result.State == ScheduledActionOperationState.Succeeded)
+            foreach (JsonElement result in doc.RootElement.GetProperty("results").EnumerateArray())
+            {
+                string resourceId = result.GetProperty("resourceId").GetString() ?? "";
+                string opType = result.TryGetProperty("operation", out JsonElement op) && op.TryGetProperty("opType", out JsonElement ot) ? ot.GetString() ?? "" : "";
+                string state = op.TryGetProperty("state", out JsonElement st) ? st.GetString() ?? "" : "";
+
+                Console.WriteLine($"  VM: {resourceId}");
+                Console.WriteLine($"  Operation: {opType}, State: {state}");
+
+                if (state == "Succeeded")
                 {
                     Console.WriteLine("  ✅ Hibernate succeeded — no fallback needed.");
                     return;
                 }
 
-                if (result.State == ScheduledActionOperationState.Failed)
+                if (state == "Failed")
                 {
-                    // Check the primary error
-                    if (result.ResourceOperationError is not null)
+                    if (op.TryGetProperty("resourceOperationError", out JsonElement error))
                     {
-                        Console.WriteLine($"  Primary error: {result.ResourceOperationError.ErrorCode} — {result.ResourceOperationError.ErrorDetails}");
+                        Console.WriteLine($"  Primary error: {error.GetProperty("errorCode").GetString()} — {error.GetProperty("errorDetails").GetString()}");
                     }
 
-                    // Check fallback outcome via the typed FallbackOperationInfo property
-                    if (result.FallbackOperationInfo is not null)
+                    if (op.TryGetProperty("fallbackOperationInfo", out JsonElement fallback))
                     {
-                        var fallback = result.FallbackOperationInfo;
+                        string fallbackStatus = fallback.GetProperty("status").GetString() ?? "Unknown";
+                        string fallbackOp = fallback.GetProperty("lastOpType").GetString() ?? "Unknown";
 
-                        if (fallback.Status == "Succeeded")
+                        if (fallbackStatus == "Succeeded")
                         {
-                            Console.WriteLine($"  ✅ Fallback ({fallback.LastOpType}) succeeded — VM was deallocated.");
+                            Console.WriteLine($"  ✅ Fallback ({fallbackOp}) succeeded — VM was deallocated.");
                         }
                         else
                         {
-                            Console.WriteLine($"  ❌ Fallback ({fallback.LastOpType}) also failed.");
-                            if (fallback.Error is not null)
+                            Console.WriteLine($"  ❌ Fallback ({fallbackOp}) also failed.");
+                            if (fallback.TryGetProperty("error", out JsonElement fallbackError))
                             {
-                                Console.WriteLine($"     Fallback error: {fallback.Error}");
+                                Console.WriteLine($"     Fallback error: {fallbackError}");
                             }
                         }
                     }
