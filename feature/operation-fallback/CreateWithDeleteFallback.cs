@@ -9,27 +9,21 @@ using Azure.ResourceManager.Resources;
 namespace ComputeScheduleSampleProject.Feature.OperationFallback;
 
 /// <summary>
-/// Demonstrates how to submit a Start operation with a clean-boot fallback.
+/// Demonstrates how to submit a Create operation with a Delete fallback.
 ///
-/// When a hibernated VM fails to resume after all retries, setting
-/// OnFailureAction to "Start" tells the system to discard the hibernated
-/// session state and perform a fresh boot — maximizing the chance of the
-/// VM coming back online.
-///
-/// ⚠️ The fallback discards the hibernated session state. The VM will
-///    boot as if it were cold-started.
+/// If the VM creation fails after all retries, the system automatically
+/// deletes the partially-created VM to clean up resources.
 /// </summary>
-internal static class StartWithCleanBootFallback
+internal static class CreateWithDeleteFallback
 {
     /// <summary>
-    /// Submits a Start request with retry policy and Start (clean-boot) fallback,
+    /// Submits a Create request with retry policy and Delete fallback,
     /// then polls for the operation result and interprets the fallback outcome.
     /// </summary>
     /// <param name="simulationPolicy">
     /// Optional simulation policy to inject simulated failures for testing.
-    /// Use SimulationProfilePolicy.StartRetryFailsFallbackSucceeds() to demo fallback.
     /// </param>
-    public static async Task RunAsync(string subscriptionId, string location, string vmResourceId, SimulationProfilePolicy? simulationPolicy = null)
+    public static async Task RunAsync(string subscriptionId, string location, ResourceProvisionPayload resourceConfig, SimulationProfilePolicy? simulationPolicy = null)
     {
         TokenCredential credential = new DefaultAzureCredential();
 
@@ -44,27 +38,29 @@ internal static class StartWithCleanBootFallback
         ResourceIdentifier subscriptionResourceId = SubscriptionResource.CreateResourceIdentifier(subscriptionId);
         SubscriptionResource subscription = client.GetSubscriptionResource(subscriptionResourceId);
 
-        // 1. Build a RetryPolicy with Start (clean-boot) fallback
+        // 1. Build a RetryPolicy with Delete fallback
         var retryPolicy = new UserRequestRetryPolicy
         {
             RetryWindowInMinutes = 30,
-            OnFailureAction = "Start"
+            OnFailureAction = "Delete"
         };
 
-        // 2. Build the Start request
+        // 2. Build the Create request
         var executionParameters = new ScheduledActionExecutionParameterDetail
         {
             RetryPolicy = retryPolicy
         };
 
-        var resources = new UserRequestResources(new List<ResourceIdentifier> { new(vmResourceId) });
         string correlationId = Guid.NewGuid().ToString();
-        var startRequest = new ExecuteStartContent(executionParameters, resources, correlationId);
+        var createRequest = new ExecuteCreateContent(resourceConfig, executionParameters)
+        {
+            CorrelationId = correlationId
+        };
 
-        // 3. Submit the Start operation
-        Console.WriteLine($"Submitting Start with clean-boot fallback for: {vmResourceId}");
-        StartResourceOperationResult response =
-            await subscription.ExecuteVirtualMachineStartAsync(location, startRequest);
+        // 3. Submit the Create operation
+        Console.WriteLine($"Submitting Create with Delete fallback for prefix: {resourceConfig.ResourcePrefix}");
+        CreateResourceOperationResult response =
+            await subscription.ExecuteVirtualMachineCreateOperationAsync(location, createRequest);
 
         // 4. Collect operation IDs from the response
         var operationIds = response.Results

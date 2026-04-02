@@ -266,6 +266,8 @@ These samples require `Azure.ResourceManager.ComputeSchedule` version **1.2.0-al
 |------|-------------|
 | [HibernateWithDeallocateFallback.cs](HibernateWithDeallocateFallback.cs) | Hibernate a VM with automatic Deallocate if hibernate fails |
 | [StartWithCleanBootFallback.cs](StartWithCleanBootFallback.cs) | Resume a hibernated VM with automatic clean boot if resume fails |
+| [CreateWithDeleteFallback.cs](CreateWithDeleteFallback.cs) | Create a VM with automatic Delete cleanup if creation fails |
+| [OperationStatusHelper.cs](OperationStatusHelper.cs) | Shared helper for polling status and interpreting fallback results |
 | [SimulationProfilePolicy.cs](SimulationProfilePolicy.cs) | Pipeline policy for injecting simulated failures to test fallback scenarios |
 
 ### Testing with simulation mode

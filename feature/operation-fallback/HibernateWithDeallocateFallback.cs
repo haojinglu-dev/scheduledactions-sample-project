@@ -1,11 +1,10 @@
 using Azure.Core;
+using Azure.Core.Pipeline;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ComputeSchedule;
 using Azure.ResourceManager.ComputeSchedule.Models;
 using Azure.ResourceManager.Resources;
-using System.ClientModel.Primitives;
-using System.Text.Json;
 
 namespace ComputeScheduleSampleProject.Feature.OperationFallback;
 
@@ -44,7 +43,7 @@ internal static class HibernateWithDeallocateFallback
         // 1. Build a RetryPolicy with Deallocate fallback
         var retryPolicy = new UserRequestRetryPolicy
         {
-            RetryWindowInMinutes = 60,
+            RetryWindowInMinutes = 30,
             OnFailureAction = "Deallocate"
         };
 
@@ -72,82 +71,6 @@ internal static class HibernateWithDeallocateFallback
         Console.WriteLine($"Operation submitted. IDs: {string.Join(", ", operationIds)}");
 
         // 5. Poll for status and interpret the result
-        await PollAndInterpretResultAsync(subscription, location, operationIds!);
-    }
-
-    /// <summary>
-    /// Polls operation status and interprets the fallback result.
-    /// When a fallback is configured, the top-level state reflects the primary
-    /// operation outcome. Check FallbackOperationInfo to determine if the
-    /// fallback recovered the VM.
-    /// </summary>
-    private static async Task PollAndInterpretResultAsync(
-        SubscriptionResource subscription,
-        string location,
-        List<string> operationIds)
-    {
-        var statusRequest = new GetOperationStatusContent(operationIds, Guid.NewGuid().ToString());
-
-        while (true)
-        {
-            GetOperationStatusResult statusResponse =
-                await subscription.GetVirtualMachineOperationStatusAsync(location, statusRequest);
-
-            // Serialize to JSON for full access to all fields including FallbackOperationInfo
-            BinaryData rawResponse = ModelReaderWriter.Write(statusResponse, ModelReaderWriterOptions.Json);
-            using JsonDocument doc = JsonDocument.Parse(rawResponse);
-
-            foreach (JsonElement result in doc.RootElement.GetProperty("results").EnumerateArray())
-            {
-                string resourceId = result.GetProperty("resourceId").GetString() ?? "";
-                string opType = result.TryGetProperty("operation", out JsonElement op) && op.TryGetProperty("opType", out JsonElement ot) ? ot.GetString() ?? "" : "";
-                string state = op.TryGetProperty("state", out JsonElement st) ? st.GetString() ?? "" : "";
-
-                Console.WriteLine($"  VM: {resourceId}");
-                Console.WriteLine($"  Operation: {opType}, State: {state}");
-
-                if (state == "Succeeded")
-                {
-                    Console.WriteLine("  ✅ Hibernate succeeded — no fallback needed.");
-                    return;
-                }
-
-                if (state == "Failed")
-                {
-                    if (op.TryGetProperty("resourceOperationError", out JsonElement error))
-                    {
-                        Console.WriteLine($"  Primary error: {error.GetProperty("errorCode").GetString()} — {error.GetProperty("errorDetails").GetString()}");
-                    }
-
-                    if (op.TryGetProperty("fallbackOperationInfo", out JsonElement fallback))
-                    {
-                        string fallbackStatus = fallback.GetProperty("status").GetString() ?? "Unknown";
-                        string fallbackOp = fallback.GetProperty("lastOpType").GetString() ?? "Unknown";
-
-                        if (fallbackStatus == "Succeeded")
-                        {
-                            Console.WriteLine($"  ✅ Fallback ({fallbackOp}) succeeded — VM was deallocated.");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"  ❌ Fallback ({fallbackOp}) also failed.");
-                            if (fallback.TryGetProperty("error", out JsonElement fallbackError))
-                            {
-                                Console.WriteLine($"     Fallback error: {fallbackError}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("  ❌ Operation failed with no fallback executed.");
-                    }
-
-                    return;
-                }
-            }
-
-            Console.WriteLine("  ⏳ Operation in progress, checking again in 30 seconds...");
-            await Task.Delay(TimeSpan.FromSeconds(30));
-        }
+        await OperationStatusHelper.PollAndInterpretAsync(subscription, location, operationIds!);
     }
 }
