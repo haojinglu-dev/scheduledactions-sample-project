@@ -19,3 +19,6 @@ await HibernateWithDeallocateFallback.RunAsync(subscriptionId, location, vmResou
 // Scenario 3: Create with Delete fallback
 // var resourceConfig = new Azure.ResourceManager.ComputeSchedule.Models.ResourceProvisionPayload("your-base-profile-arm-id");
 // await CreateWithDeleteFallback.RunAsync(subscriptionId, location, resourceConfig);
+
+// Scenario 4: Hibernate with Deallocate fallback, no retry window (single attempt → fallback)
+// await HibernateFallbackOnlyNoRetry.RunAsync(subscriptionId, location, vmResourceId);
